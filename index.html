@@ -1,0 +1,1123 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<!-- 让手机上页面不缩放、不可双指放大 -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>星际飞机大战</title>
+<style>
+  /* ========== 颜色变量：霓虹蓝 + 紫色 ========== */
+  :root {
+    --bg: #05010f;
+    --neon-blue: #00e5ff;
+    --neon-purple: #b026ff;
+    --neon-pink: #ff2fd6;
+    --text: #e6f7ff;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html, body {
+    width: 100%;
+    height: 100%;
+    overflow: hidden;            /* 不出现滚动条 */
+    background: var(--bg);
+    color: var(--text);
+    font-family: "PingFang SC", "Microsoft YaHei", system-ui, sans-serif;
+    user-select: none;           /* 禁止选中文字 */
+    -webkit-user-select: none;
+    touch-action: none;          /* 禁止手机上的默认滑动/缩放 */
+  }
+
+  /* 游戏画布铺满整个屏幕 */
+  #game {
+    position: fixed;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    cursor: crosshair;
+  }
+
+  /* ========== 顶部信息栏（分数、最高分、生命） ========== */
+  #hud {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    padding: 12px 16px;
+    pointer-events: none;        /* 让鼠标事件穿透到画布 */
+    font-size: 16px;
+    letter-spacing: 1px;
+    text-shadow: 0 0 6px var(--neon-blue), 0 0 12px var(--neon-blue);
+  }
+  #hud .num {
+    font-family: "Consolas", "Courier New", monospace;
+    font-weight: bold;
+    font-size: 20px;
+    color: var(--neon-blue);
+  }
+  #lives { color: var(--neon-pink); text-shadow: 0 0 8px var(--neon-pink); font-size: 20px; }
+  #powerTip {
+    margin-top: 6px;
+    font-size: 13px;
+    color: #ffe14d;
+    text-shadow: 0 0 8px #ffb300;
+    display: none;
+  }
+  #hudRight { text-align: right; }
+
+  /* 声音开关按钮 */
+  #soundBtn {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid var(--neon-blue);
+    background: rgba(0, 229, 255, 0.08);
+    color: var(--neon-blue);
+    font-size: 20px;
+    cursor: pointer;
+    box-shadow: 0 0 10px rgba(0, 229, 255, 0.5);
+    z-index: 5;
+  }
+
+  /* ========== 开始 / 结束 弹窗 ========== */
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: rgba(5, 1, 15, 0.6);
+    backdrop-filter: blur(3px);
+    z-index: 10;
+    padding: 16px;
+  }
+  .hidden { display: none !important; }
+
+  .panel {
+    width: 100%;
+    max-width: 380px;
+    padding: 32px 24px;
+    text-align: center;
+    border: 1px solid var(--neon-blue);
+    border-radius: 16px;
+    background: linear-gradient(160deg, rgba(0, 229, 255, 0.08), rgba(176, 38, 255, 0.12));
+    box-shadow: 0 0 20px rgba(0, 229, 255, 0.4), inset 0 0 30px rgba(176, 38, 255, 0.25);
+  }
+  .panel h1 {
+    font-size: 34px;
+    letter-spacing: 4px;
+    margin-bottom: 16px;
+    color: #fff;
+    text-shadow: 0 0 8px var(--neon-blue), 0 0 20px var(--neon-purple), 0 0 40px var(--neon-purple);
+  }
+  .panel p {
+    line-height: 1.9;
+    font-size: 14px;
+    color: #b9d9ff;
+  }
+  .panel .big {
+    font-size: 22px;
+    color: var(--text);
+    margin: 4px 0;
+  }
+  .panel .big b {
+    color: var(--neon-blue);
+    font-family: "Consolas", "Courier New", monospace;
+    text-shadow: 0 0 10px var(--neon-blue);
+  }
+  #newRecord {
+    color: #ffe14d;
+    text-shadow: 0 0 10px #ffb300;
+    font-weight: bold;
+    margin-top: 6px;
+  }
+
+  .btn {
+    margin-top: 22px;
+    padding: 12px 40px;
+    font-size: 18px;
+    letter-spacing: 4px;
+    color: #fff;
+    background: linear-gradient(90deg, var(--neon-blue), var(--neon-purple));
+    border: none;
+    border-radius: 30px;
+    cursor: pointer;
+    box-shadow: 0 0 16px var(--neon-blue), 0 0 30px rgba(176, 38, 255, 0.6);
+    transition: transform 0.15s;
+  }
+  .btn:hover { transform: scale(1.06); }
+  .btn:active { transform: scale(0.96); }
+
+  /* Boss 来袭的提示文字 */
+  #bossWarn {
+    position: fixed;
+    top: 40%;
+    left: 0; right: 0;
+    text-align: center;
+    font-size: 36px;
+    font-weight: bold;
+    letter-spacing: 6px;
+    color: var(--neon-pink);
+    text-shadow: 0 0 10px var(--neon-pink), 0 0 30px var(--neon-purple);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.3s;
+  }
+</style>
+</head>
+<body>
+
+<canvas id="game"></canvas>
+
+<!-- 顶部信息栏 -->
+<div id="hud">
+  <div>
+    <div>分数 <span class="num" id="score">0</span></div>
+    <div id="powerTip">⚡ 三发散射 <span id="powerTime">10</span> 秒</div>
+  </div>
+  <div id="hudRight">
+    <div>最高 <span class="num" id="best">0</span></div>
+    <div id="lives">❤❤❤</div>
+  </div>
+</div>
+
+<button id="soundBtn" title="开关声音">🔊</button>
+<div id="bossWarn">⚠ BOSS 来袭 ⚠</div>
+
+<!-- 开始界面 -->
+<div class="overlay" id="startScreen">
+  <div class="panel">
+    <h1>星际飞机大战</h1>
+    <p>
+      电脑：方向键 / WASD 或 鼠标移动<br>
+      手机：手指在屏幕上拖动<br>
+      自动射击 · 吃到 <span style="color:#ffe14d">⚡道具</span> 三发散射 10 秒<br>
+      每 500 分出现 Boss
+    </p>
+    <p class="big">最高分 <b id="startBest">0</b></p>
+    <button class="btn" id="startBtn">开始游戏</button>
+  </div>
+</div>
+
+<!-- 游戏结束界面 -->
+<div class="overlay hidden" id="overScreen">
+  <div class="panel">
+    <h1>游戏结束</h1>
+    <p class="big">本局得分 <b id="finalScore">0</b></p>
+    <p class="big">最高分 <b id="finalBest">0</b></p>
+    <div id="newRecord" class="hidden">🎉 新纪录！</div>
+    <button class="btn" id="restartBtn">重新开始</button>
+  </div>
+</div>
+
+<script>
+// =====================================================================
+//  一、基础准备：画布、屏幕尺寸
+// =====================================================================
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+
+let W = 0, H = 0;   // 屏幕的宽和高（单位：CSS 像素）
+
+// 根据窗口大小调整画布，同时适配高清屏（让画面不模糊）
+function resize() {
+  const dpr = window.devicePixelRatio || 1;
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W * dpr;
+  canvas.height = H * dpr;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  // 窗口变小时，防止飞机跑到屏幕外
+  if (player) {
+    player.x = clamp(player.x, player.r, W - player.r);
+    player.y = clamp(player.y, player.r, H - player.r);
+  }
+}
+window.addEventListener('resize', resize);
+
+// 常用小工具
+function clamp(v, min, max) { return Math.max(min, Math.min(max, v)); }
+function rand(min, max) { return Math.random() * (max - min) + min; }
+// 判断两个圆是否相撞（a、b 都有 x、y、r 属性）
+function hit(a, b) {
+  const dx = a.x - b.x, dy = a.y - b.y;
+  const rr = a.r + b.r;
+  return dx * dx + dy * dy < rr * rr;
+}
+
+// =====================================================================
+//  二、最高分（保存在浏览器里，关掉网页也不会丢）
+// =====================================================================
+const BEST_KEY = 'feijidazhan_best';
+function loadBest() {
+  try { return parseInt(localStorage.getItem(BEST_KEY)) || 0; }
+  catch (e) { return 0; }   // 某些隐私模式下无法读取，就当 0 分
+}
+function saveBest(v) {
+  try { localStorage.setItem(BEST_KEY, String(v)); } catch (e) { /* 保存失败就算了 */ }
+}
+let best = loadBest();
+
+// =====================================================================
+//  三、音效（用浏览器自带的 Web Audio 实时合成，不需要声音文件）
+// =====================================================================
+let audioCtx = null;
+let soundOn = true;
+
+// 浏览器规定：必须在用户点击之后才能播放声音，所以在点“开始游戏”时调用
+function initAudio() {
+  if (!audioCtx) {
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (AC) audioCtx = new AC();
+  }
+  if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
+}
+
+// 射击音效：一个快速下降的“啾”声
+function playShoot() {
+  if (!soundOn || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'square';
+  osc.frequency.setValueAtTime(880, t);
+  osc.frequency.exponentialRampToValueAtTime(220, t + 0.08);
+  gain.gain.setValueAtTime(0.03, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.08);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + 0.09);
+}
+
+// 爆炸音效：用随机“噪声”模拟，big 为 true 时声音更大更长
+let noiseBuffer = null;
+function playExplosion(big) {
+  if (!soundOn || !audioCtx) return;
+  // 第一次用时生成一段 1 秒的白噪声，之后重复使用
+  if (!noiseBuffer) {
+    noiseBuffer = audioCtx.createBuffer(1, audioCtx.sampleRate, audioCtx.sampleRate);
+    const data = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < data.length; i++) data[i] = Math.random() * 2 - 1;
+  }
+  const t = audioCtx.currentTime;
+  const dur = big ? 0.9 : 0.35;
+  const src = audioCtx.createBufferSource();
+  src.buffer = noiseBuffer;
+  // 低通滤波器：让噪声听起来更“闷”，像爆炸
+  const filter = audioCtx.createBiquadFilter();
+  filter.type = 'lowpass';
+  filter.frequency.setValueAtTime(big ? 1200 : 2000, t);
+  filter.frequency.exponentialRampToValueAtTime(80, t + dur);
+  const gain = audioCtx.createGain();
+  gain.gain.setValueAtTime(big ? 0.5 : 0.25, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  src.connect(filter).connect(gain).connect(audioCtx.destination);
+  src.start(t);
+  src.stop(t + dur);
+}
+
+// 吃到道具音效：三个上升的音符
+function playPowerUp() {
+  if (!soundOn || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  [523, 659, 880].forEach((f, i) => {
+    const osc = audioCtx.createOscillator();
+    const gain = audioCtx.createGain();
+    osc.type = 'triangle';
+    osc.frequency.value = f;
+    gain.gain.setValueAtTime(0.12, t + i * 0.08);
+    gain.gain.exponentialRampToValueAtTime(0.001, t + i * 0.08 + 0.15);
+    osc.connect(gain).connect(audioCtx.destination);
+    osc.start(t + i * 0.08);
+    osc.stop(t + i * 0.08 + 0.16);
+  });
+}
+
+// 玩家被击中音效：低沉的下滑音
+function playHurt() {
+  if (!soundOn || !audioCtx) return;
+  const t = audioCtx.currentTime;
+  const osc = audioCtx.createOscillator();
+  const gain = audioCtx.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(300, t);
+  osc.frequency.exponentialRampToValueAtTime(50, t + 0.4);
+  gain.gain.setValueAtTime(0.15, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + 0.4);
+  osc.connect(gain).connect(audioCtx.destination);
+  osc.start(t);
+  osc.stop(t + 0.42);
+}
+
+// 声音开关按钮
+const soundBtn = document.getElementById('soundBtn');
+soundBtn.addEventListener('click', () => {
+  soundOn = !soundOn;
+  soundBtn.textContent = soundOn ? '🔊' : '🔇';
+  initAudio();
+});
+
+// =====================================================================
+//  四、流动星空背景
+// =====================================================================
+// 分三层星星：远处的小而慢，近处的大而快，看起来有立体感
+const stars = [];
+function initStars() {
+  stars.length = 0;
+  const count = Math.floor((window.innerWidth * window.innerHeight) / 4000) + 60;
+  for (let i = 0; i < count; i++) {
+    const layer = Math.floor(Math.random() * 3);   // 0、1、2 三层
+    stars.push({
+      x: Math.random() * window.innerWidth,
+      y: Math.random() * window.innerHeight,
+      size: 0.6 + layer * 0.7,
+      speed: 30 + layer * 60,
+      // 颜色在 蓝 / 紫 / 白 之间随机
+      color: ['#00e5ff', '#b026ff', '#ffffff'][Math.floor(Math.random() * 3)],
+      twinkle: Math.random() * Math.PI * 2,
+    });
+  }
+}
+
+let gridOffset = 0;   // 背景网格的滚动位置
+
+function updateStars(dt, speedUp) {
+  for (const s of stars) {
+    s.y += s.speed * speedUp * dt;
+    s.twinkle += dt * 3;
+    if (s.y > H) { s.y = -2; s.x = Math.random() * W; }
+  }
+  gridOffset = (gridOffset + 40 * speedUp * dt) % 60;
+}
+
+function drawBackground() {
+  // 深色渐变底色（上面偏紫，下面偏蓝）
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, '#0a0220');
+  g.addColorStop(1, '#020818');
+  ctx.fillStyle = g;
+  ctx.fillRect(0, 0, W, H);
+
+  // 科技感的淡淡网格线，缓慢向下移动
+  ctx.strokeStyle = 'rgba(0, 229, 255, 0.05)';
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  for (let x = 0; x < W; x += 60) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = gridOffset - 60; y < H; y += 60) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+
+  // 星星（快的星星画成短线，有“流动”的感觉）
+  for (const s of stars) {
+    ctx.globalAlpha = 0.5 + Math.sin(s.twinkle) * 0.3;
+    ctx.fillStyle = s.color;
+    const len = s.speed > 100 ? s.size * 4 : s.size;
+    ctx.fillRect(s.x, s.y, s.size, len);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// =====================================================================
+//  五、游戏里的各种对象
+// =====================================================================
+let player = null;      // 玩家飞机
+let bullets = [];       // 玩家子弹
+let enemies = [];       // 普通敌机
+let enemyBullets = [];  // 敌人子弹
+let particles = [];     // 爆炸碎片
+let powerups = [];      // 道具
+let boss = null;        // 当前的 Boss（没有就是 null）
+
+let score = 0;
+let lives = 3;
+let state = 'menu';     // 游戏状态：menu 菜单 / playing 进行中 / over 结束
+let spawnTimer = 0;     // 距离下一次出敌机的时间
+let shootTimer = 0;     // 距离下一次射击的时间
+let tripleTime = 0;     // 三发散射剩余时间（秒）
+let nextBossScore = 500;// 下一次 Boss 出现的分数
+let bossCount = 0;      // 已经出现过几个 Boss
+let shake = 0;          // 屏幕震动强度
+
+const POWER_DURATION = 10;  // 道具持续 10 秒
+const BOSS_EVERY = 500;     // 每 500 分出一次 Boss
+
+// 根据分数计算难度系数：从 1 开始，分数越高越大（最多 3.5）
+function difficulty() {
+  return Math.min(1 + score / 800, 3.5);
+}
+
+// ---------- 创建玩家 ----------
+function createPlayer() {
+  return {
+    x: W / 2,
+    y: H - 100,
+    r: 16,            // 碰撞半径
+    speed: 420,       // 键盘移动速度（像素/秒）
+    invincible: 0,    // 无敌剩余时间（被击中后闪烁 2 秒）
+    targetX: null,    // 鼠标指向的目标位置
+    targetY: null,
+  };
+}
+
+// ---------- 创建普通敌机 ----------
+function spawnEnemy() {
+  const d = difficulty();
+  // 分数高了以后，会出现更耐打的“重型敌机”
+  const heavy = score > 200 && Math.random() < Math.min(0.15 + score / 5000, 0.4);
+  const r = heavy ? 26 : 18;
+  enemies.push({
+    x: rand(r, W - r),
+    y: -r,
+    r: r,
+    hp: heavy ? 4 : 1,
+    maxHp: heavy ? 4 : 1,
+    heavy: heavy,
+    speed: rand(90, 150) * d * (heavy ? 0.7 : 1),
+    sway: rand(0, Math.PI * 2),           // 左右摇摆的相位
+    swayAmp: rand(0, 60),                 // 摇摆幅度
+    // 分数到 300 分后，部分敌机会开火
+    shootTimer: score > 300 ? rand(1, 3) : Infinity,
+    score: heavy ? 30 : 10,
+  });
+}
+
+// ---------- 创建 Boss ----------
+function spawnBoss() {
+  bossCount++;
+  const hp = 80 + bossCount * 60;      // 每一个 Boss 都比上一个更耐打
+  boss = {
+    x: W / 2,
+    y: -100,
+    r: 60,
+    w: 160,
+    h: 90,
+    hp: hp,
+    maxHp: hp,
+    t: 0,                               // 存活时间，用来做左右移动
+    shootTimer: 1.5,
+    entering: true,                      // 正在从屏幕上方飞进来
+  };
+  // 显示“BOSS 来袭”提示
+  const warn = document.getElementById('bossWarn');
+  warn.style.opacity = 1;
+  setTimeout(() => (warn.style.opacity = 0), 1800);
+}
+
+// ---------- 产生爆炸碎片 ----------
+function explode(x, y, color, count) {
+  for (let i = 0; i < count; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const sp = rand(60, 320);
+    particles.push({
+      x, y,
+      vx: Math.cos(angle) * sp,
+      vy: Math.sin(angle) * sp,
+      life: rand(0.4, 0.9),
+      maxLife: 0.9,
+      size: rand(1.5, 4),
+      color: Math.random() < 0.5 ? color : '#ffffff',
+    });
+  }
+}
+
+// ---------- 掉落道具 ----------
+function dropPowerup(x, y) {
+  powerups.push({ x, y, r: 14, t: 0 });
+}
+
+// =====================================================================
+//  六、操作控制：键盘、鼠标、触摸
+// =====================================================================
+const keys = {};
+window.addEventListener('keydown', (e) => {
+  keys[e.key] = true;
+  // 阻止方向键让页面滚动
+  if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(e.key)) e.preventDefault();
+});
+window.addEventListener('keyup', (e) => { keys[e.key] = false; });
+
+// 鼠标：飞机跟着鼠标走
+canvas.addEventListener('mousemove', (e) => {
+  if (!player) return;
+  player.targetX = e.clientX;
+  player.targetY = e.clientY;
+});
+
+// 触摸：手指拖动多少，飞机就移动多少（这样手指不会挡住飞机）
+let touchStart = null;
+canvas.addEventListener('touchstart', (e) => {
+  e.preventDefault();
+  if (!player) return;
+  const t = e.touches[0];
+  touchStart = { fx: t.clientX, fy: t.clientY, px: player.x, py: player.y };
+  player.targetX = null;   // 触摸时不用鼠标目标
+}, { passive: false });
+
+canvas.addEventListener('touchmove', (e) => {
+  e.preventDefault();
+  if (!player || !touchStart) return;
+  const t = e.touches[0];
+  player.x = clamp(touchStart.px + (t.clientX - touchStart.fx), player.r, W - player.r);
+  player.y = clamp(touchStart.py + (t.clientY - touchStart.fy), player.r, H - player.r);
+}, { passive: false });
+
+canvas.addEventListener('touchend', () => { touchStart = null; });
+
+// =====================================================================
+//  七、游戏流程：开始、结束
+// =====================================================================
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const livesEl = document.getElementById('lives');
+const powerTip = document.getElementById('powerTip');
+const powerTimeEl = document.getElementById('powerTime');
+
+function updateHUD() {
+  scoreEl.textContent = score;
+  bestEl.textContent = best;
+  livesEl.textContent = '❤'.repeat(Math.max(lives, 0)) + '♡'.repeat(Math.max(3 - lives, 0));
+  if (tripleTime > 0) {
+    powerTip.style.display = 'block';
+    powerTimeEl.textContent = Math.ceil(tripleTime);
+  } else {
+    powerTip.style.display = 'none';
+  }
+}
+
+function startGame() {
+  initAudio();
+  player = createPlayer();
+  bullets = []; enemies = []; enemyBullets = []; particles = []; powerups = [];
+  boss = null;
+  score = 0;
+  lives = 3;
+  spawnTimer = 1;
+  shootTimer = 0;
+  tripleTime = 0;
+  nextBossScore = BOSS_EVERY;
+  bossCount = 0;
+  state = 'playing';
+  document.getElementById('startScreen').classList.add('hidden');
+  document.getElementById('overScreen').classList.add('hidden');
+  updateHUD();
+}
+
+function gameOver() {
+  state = 'over';
+  explode(player.x, player.y, '#00e5ff', 60);
+  playExplosion(true);
+  // 是否刷新了最高分
+  const isRecord = score > best;
+  if (isRecord) { best = score; saveBest(best); }
+  document.getElementById('finalScore').textContent = score;
+  document.getElementById('finalBest').textContent = best;
+  document.getElementById('newRecord').classList.toggle('hidden', !isRecord);
+  // 稍等一下再弹出结束界面，让玩家看到爆炸
+  setTimeout(() => document.getElementById('overScreen').classList.remove('hidden'), 900);
+  updateHUD();
+}
+
+// 玩家被击中
+function hurtPlayer() {
+  if (player.invincible > 0) return;   // 无敌时间内不扣血
+  lives--;
+  shake = 12;
+  playHurt();
+  explode(player.x, player.y, '#ff2fd6', 25);
+  if (lives <= 0) {
+    gameOver();
+  } else {
+    player.invincible = 2;    // 2 秒无敌
+  }
+  updateHUD();
+}
+
+// 加分
+function addScore(n) {
+  score += n;
+  if (score > best) { best = score; saveBest(best); }
+  updateHUD();
+}
+
+document.getElementById('startBtn').addEventListener('click', startGame);
+document.getElementById('restartBtn').addEventListener('click', startGame);
+document.getElementById('startBest').textContent = best;
+
+// =====================================================================
+//  八、每一帧的更新逻辑
+// =====================================================================
+function update(dt) {
+  const d = difficulty();
+  updateStars(dt, state === 'playing' ? 1 + (d - 1) * 0.5 : 1);
+
+  // 爆炸碎片在任何状态下都继续飞
+  for (const p of particles) {
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vx *= 0.96; p.vy *= 0.96;   // 慢慢减速
+    p.life -= dt;
+  }
+  particles = particles.filter(p => p.life > 0);
+  if (shake > 0) shake = Math.max(0, shake - 40 * dt);
+
+  if (state !== 'playing') return;
+
+  // ---------- 1. 移动玩家 ----------
+  let mx = 0, my = 0;
+  if (keys['ArrowLeft'] || keys['a'] || keys['A']) mx -= 1;
+  if (keys['ArrowRight'] || keys['d'] || keys['D']) mx += 1;
+  if (keys['ArrowUp'] || keys['w'] || keys['W']) my -= 1;
+  if (keys['ArrowDown'] || keys['s'] || keys['S']) my += 1;
+  if (mx || my) {
+    // 用键盘时，取消鼠标目标
+    player.targetX = null;
+    const len = Math.hypot(mx, my);
+    player.x += (mx / len) * player.speed * dt;
+    player.y += (my / len) * player.speed * dt;
+  } else if (player.targetX !== null) {
+    // 平滑地飞向鼠标位置
+    player.x += (player.targetX - player.x) * Math.min(1, 15 * dt);
+    player.y += (player.targetY - player.y) * Math.min(1, 15 * dt);
+  }
+  player.x = clamp(player.x, player.r, W - player.r);
+  player.y = clamp(player.y, player.r, H - player.r);
+  if (player.invincible > 0) player.invincible -= dt;
+
+  // ---------- 2. 自动射击 ----------
+  shootTimer -= dt;
+  if (shootTimer <= 0) {
+    shootTimer = 0.14;   // 每 0.14 秒一发
+    if (tripleTime > 0) {
+      // 三发散射：中间直射，两边斜射
+      [-0.25, 0, 0.25].forEach(angle => {
+        bullets.push({ x: player.x, y: player.y - 20, r: 4, vx: Math.sin(angle) * 700, vy: -Math.cos(angle) * 700 });
+      });
+    } else {
+      bullets.push({ x: player.x, y: player.y - 20, r: 4, vx: 0, vy: -700 });
+    }
+    playShoot();
+  }
+  if (tripleTime > 0) {
+    tripleTime -= dt;
+    updateHUD();
+  }
+
+  // ---------- 3. 移动玩家子弹 ----------
+  for (const b of bullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
+  bullets = bullets.filter(b => b.y > -20 && b.x > -20 && b.x < W + 20);
+
+  // ---------- 4. 生成敌机 ----------
+  // Boss 是否该出场了？
+  if (!boss && score >= nextBossScore) {
+    spawnBoss();
+    nextBossScore += BOSS_EVERY;
+  }
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnEnemy();
+    // 分数越高，敌机出现得越频繁；Boss 在场时减少小兵
+    const interval = Math.max(0.22, 1.0 / d);
+    spawnTimer = boss ? interval * 2.5 : interval * rand(0.6, 1.4);
+  }
+
+  // ---------- 5. 移动普通敌机 ----------
+  for (const e of enemies) {
+    e.y += e.speed * dt;
+    e.sway += dt * 2;
+    e.x += Math.cos(e.sway) * e.swayAmp * dt;
+    e.x = clamp(e.x, e.r, W - e.r);
+    // 敌机开火：朝玩家方向发射子弹
+    e.shootTimer -= dt;
+    if (e.shootTimer <= 0 && e.y > 0 && e.y < H * 0.6) {
+      e.shootTimer = rand(2, 4) / d;
+      const angle = Math.atan2(player.y - e.y, player.x - e.x);
+      const sp = 200 + 40 * d;
+      enemyBullets.push({ x: e.x, y: e.y + e.r, r: 5, vx: Math.cos(angle) * sp, vy: Math.sin(angle) * sp });
+    }
+  }
+  enemies = enemies.filter(e => e.y < H + 50 && e.hp > 0);
+
+  // ---------- 6. Boss 的行为 ----------
+  if (boss) {
+    boss.t += dt;
+    if (boss.entering) {
+      // 从上方慢慢飞进来
+      boss.y += 80 * dt;
+      if (boss.y >= 120) boss.entering = false;
+    } else {
+      // 左右来回移动，并上下轻微浮动
+      boss.x = W / 2 + Math.sin(boss.t * 0.8) * (W / 2 - boss.w / 2 - 10);
+      boss.y = 120 + Math.sin(boss.t * 1.7) * 20;
+      // 开火：扇形弹幕，越后面的 Boss 子弹越多越快
+      boss.shootTimer -= dt;
+      if (boss.shootTimer <= 0) {
+        boss.shootTimer = Math.max(0.6, 1.6 - bossCount * 0.15);
+        const n = 5 + bossCount * 2;
+        const spread = 1.2;
+        const base = Math.atan2(player.y - boss.y, player.x - boss.x);
+        for (let i = 0; i < n; i++) {
+          const a = base - spread / 2 + (spread * i) / (n - 1);
+          const sp = 180 + bossCount * 20;
+          enemyBullets.push({ x: boss.x, y: boss.y + 40, r: 6, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, boss: true });
+        }
+      }
+    }
+  }
+
+  // ---------- 7. 移动敌人子弹 ----------
+  for (const b of enemyBullets) { b.x += b.vx * dt; b.y += b.vy * dt; }
+  enemyBullets = enemyBullets.filter(b => b.y < H + 20 && b.y > -20 && b.x > -20 && b.x < W + 20);
+
+  // ---------- 8. 移动道具 ----------
+  for (const p of powerups) { p.y += 110 * dt; p.t += dt; }
+  powerups = powerups.filter(p => p.y < H + 30);
+
+  // ---------- 9. 碰撞检测 ----------
+  // (1) 玩家子弹 打 普通敌机
+  for (const b of bullets) {
+    for (const e of enemies) {
+      if (e.hp > 0 && hit(b, e)) {
+        b.dead = true;
+        e.hp--;
+        if (e.hp <= 0) {
+          explode(e.x, e.y, e.heavy ? '#ff2fd6' : '#b026ff', e.heavy ? 35 : 20);
+          playExplosion(false);
+          addScore(e.score);
+          // 一定概率掉落道具
+          if (Math.random() < (e.heavy ? 0.3 : 0.06)) dropPowerup(e.x, e.y);
+        } else {
+          explode(b.x, b.y, '#ffffff', 3);   // 没打死，冒一点火花
+        }
+        break;
+      }
+    }
+  }
+  // (2) 玩家子弹 打 Boss
+  if (boss) {
+    for (const b of bullets) {
+      if (!b.dead && hit(b, boss)) {
+        b.dead = true;
+        boss.hp--;
+        explode(b.x, b.y, '#ff2fd6', 3);
+        if (boss.hp <= 0) {
+          // Boss 被打爆！
+          explode(boss.x, boss.y, '#ff2fd6', 120);
+          explode(boss.x, boss.y, '#00e5ff', 80);
+          playExplosion(true);
+          shake = 20;
+          addScore(200 + bossCount * 50);
+          dropPowerup(boss.x, boss.y);   // Boss 必掉道具
+          enemyBullets = [];              // 清空屏幕上的敌人子弹
+          boss = null;
+          // 下一个 Boss 的分数：至少是当前分数之后的下一个 500 的倍数
+          nextBossScore = Math.max(nextBossScore, Math.floor(score / BOSS_EVERY) * BOSS_EVERY + BOSS_EVERY);
+          break;
+        }
+      }
+    }
+  }
+  bullets = bullets.filter(b => !b.dead);
+  enemies = enemies.filter(e => e.hp > 0);
+
+  // (3) 玩家 吃到 道具
+  for (const p of powerups) {
+    if (hit(p, player)) {
+      p.dead = true;
+      tripleTime = POWER_DURATION;
+      playPowerUp();
+      updateHUD();
+    }
+  }
+  powerups = powerups.filter(p => !p.dead);
+
+  // 玩家的碰撞判定半径稍微小一点，手感更友好
+  const playerBox = { x: player.x, y: player.y, r: player.r * 0.6 };
+
+  // (4) 敌人子弹 打 玩家
+  for (const b of enemyBullets) {
+    if (hit(b, playerBox)) {
+      b.dead = true;
+      hurtPlayer();
+      if (state !== 'playing') return;
+    }
+  }
+  enemyBullets = enemyBullets.filter(b => !b.dead);
+
+  // (5) 敌机 撞到 玩家
+  for (const e of enemies) {
+    if (hit(e, playerBox) && player.invincible <= 0) {
+      e.hp = 0;
+      explode(e.x, e.y, '#b026ff', 20);
+      playExplosion(false);
+      hurtPlayer();
+      if (state !== 'playing') return;
+    }
+  }
+  enemies = enemies.filter(e => e.hp > 0);
+
+  // (6) Boss 撞到 玩家
+  if (boss && hit(boss, playerBox)) {
+    hurtPlayer();
+  }
+}
+
+// =====================================================================
+//  九、每一帧的绘制
+// =====================================================================
+
+// 画玩家飞机（霓虹蓝）
+function drawPlayer() {
+  // 无敌时闪烁
+  if (player.invincible > 0 && Math.floor(player.invincible * 10) % 2 === 0) return;
+  const { x, y } = player;
+  ctx.save();
+  ctx.translate(x, y);
+
+  // 尾部喷射火焰（长度随机抖动）
+  const flame = rand(10, 20);
+  const fg = ctx.createLinearGradient(0, 12, 0, 12 + flame);
+  fg.addColorStop(0, 'rgba(0, 229, 255, 0.9)');
+  fg.addColorStop(1, 'rgba(176, 38, 255, 0)');
+  ctx.fillStyle = fg;
+  ctx.beginPath();
+  ctx.moveTo(-6, 12);
+  ctx.lineTo(0, 12 + flame);
+  ctx.lineTo(6, 12);
+  ctx.fill();
+
+  // 机身
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 18;
+  ctx.fillStyle = 'rgba(0, 229, 255, 0.15)';
+  ctx.strokeStyle = '#00e5ff';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.moveTo(0, -24);     // 机头
+  ctx.lineTo(8, -4);
+  ctx.lineTo(22, 10);     // 右翼
+  ctx.lineTo(8, 8);
+  ctx.lineTo(6, 14);
+  ctx.lineTo(-6, 14);
+  ctx.lineTo(-8, 8);
+  ctx.lineTo(-22, 10);    // 左翼
+  ctx.lineTo(-8, -4);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 驾驶舱（紫色）
+  ctx.shadowColor = '#b026ff';
+  ctx.fillStyle = '#b026ff';
+  ctx.beginPath();
+  ctx.ellipse(0, -6, 3, 7, 0, 0, Math.PI * 2);
+  ctx.fill();
+
+  // 吃到道具时，飞机周围有一圈黄色光环
+  if (tripleTime > 0) {
+    ctx.shadowColor = '#ffe14d';
+    ctx.strokeStyle = 'rgba(255, 225, 77, 0.6)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(0, 0, 30 + Math.sin(performance.now() / 120) * 2, 0, Math.PI * 2);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// 画普通敌机（紫色 / 粉色）
+function drawEnemy(e) {
+  ctx.save();
+  ctx.translate(e.x, e.y);
+  const color = e.heavy ? '#ff2fd6' : '#b026ff';
+  ctx.shadowColor = color;
+  ctx.shadowBlur = 14;
+  ctx.strokeStyle = color;
+  ctx.fillStyle = e.heavy ? 'rgba(255, 47, 214, 0.18)' : 'rgba(176, 38, 255, 0.18)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  if (e.heavy) {
+    // 重型敌机：六边形
+    for (let i = 0; i < 6; i++) {
+      const a = (Math.PI / 3) * i + Math.PI / 6;
+      ctx.lineTo(Math.cos(a) * e.r, Math.sin(a) * e.r);
+    }
+  } else {
+    // 普通敌机：倒三角形（机头朝下）
+    ctx.moveTo(0, e.r);
+    ctx.lineTo(e.r, -e.r * 0.6);
+    ctx.lineTo(e.r * 0.3, -e.r * 0.3);
+    ctx.lineTo(0, -e.r * 0.8);
+    ctx.lineTo(-e.r * 0.3, -e.r * 0.3);
+    ctx.lineTo(-e.r, -e.r * 0.6);
+  }
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+  // 中间的发光核心
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(0, 0, e.heavy ? 5 : 3, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // 重型敌机受伤后显示小血条
+  if (e.heavy && e.hp < e.maxHp) {
+    ctx.fillStyle = 'rgba(255,255,255,0.2)';
+    ctx.fillRect(e.x - 20, e.y - e.r - 10, 40, 4);
+    ctx.fillStyle = '#ff2fd6';
+    ctx.fillRect(e.x - 20, e.y - e.r - 10, 40 * (e.hp / e.maxHp), 4);
+  }
+}
+
+// 画 Boss
+function drawBoss() {
+  const b = boss;
+  ctx.save();
+  ctx.translate(b.x, b.y);
+  ctx.shadowColor = '#ff2fd6';
+  ctx.shadowBlur = 25;
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = '#ff2fd6';
+  ctx.fillStyle = 'rgba(176, 38, 255, 0.25)';
+
+  // 主体：宽大的战舰外形
+  ctx.beginPath();
+  ctx.moveTo(0, 50);
+  ctx.lineTo(30, 30);
+  ctx.lineTo(80, 20);
+  ctx.lineTo(70, -20);
+  ctx.lineTo(30, -40);
+  ctx.lineTo(-30, -40);
+  ctx.lineTo(-70, -20);
+  ctx.lineTo(-80, 20);
+  ctx.lineTo(-30, 30);
+  ctx.closePath();
+  ctx.fill();
+  ctx.stroke();
+
+  // 内部装饰线
+  ctx.strokeStyle = '#00e5ff';
+  ctx.shadowColor = '#00e5ff';
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(-50, -10); ctx.lineTo(50, -10);
+  ctx.moveTo(-30, 10); ctx.lineTo(30, 10);
+  ctx.stroke();
+
+  // 会跳动的能量核心
+  const pulse = 10 + Math.sin(b.t * 6) * 3;
+  ctx.fillStyle = '#ff2fd6';
+  ctx.shadowColor = '#ff2fd6';
+  ctx.beginPath();
+  ctx.arc(0, 5, pulse, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.arc(0, 5, pulse * 0.4, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+
+  // 屏幕上方的 Boss 血条
+  const barW = Math.min(W - 40, 400);
+  const bx = (W - barW) / 2, by = 84;
+  ctx.fillStyle = 'rgba(255,255,255,0.1)';
+  ctx.fillRect(bx, by, barW, 8);
+  const hg = ctx.createLinearGradient(bx, 0, bx + barW, 0);
+  hg.addColorStop(0, '#b026ff');
+  hg.addColorStop(1, '#ff2fd6');
+  ctx.fillStyle = hg;
+  ctx.shadowColor = '#ff2fd6';
+  ctx.shadowBlur = 10;
+  ctx.fillRect(bx, by, barW * (b.hp / b.maxHp), 8);
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ffd6f6';
+  ctx.font = '12px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.fillText('BOSS ' + bossCount, W / 2, by - 6);
+}
+
+// 画道具（会旋转的黄色闪电方块）
+function drawPowerup(p) {
+  ctx.save();
+  ctx.translate(p.x, p.y);
+  ctx.rotate(p.t * 2);
+  ctx.shadowColor = '#ffe14d';
+  ctx.shadowBlur = 16;
+  ctx.strokeStyle = '#ffe14d';
+  ctx.lineWidth = 2;
+  ctx.strokeRect(-p.r * 0.75, -p.r * 0.75, p.r * 1.5, p.r * 1.5);
+  ctx.rotate(-p.t * 2);
+  ctx.fillStyle = '#ffe14d';
+  ctx.font = 'bold 16px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('⚡', 0, 1);
+  ctx.restore();
+}
+
+function draw() {
+  ctx.save();
+  // 屏幕震动效果
+  if (shake > 0) ctx.translate(rand(-shake, shake), rand(-shake, shake));
+
+  drawBackground();
+
+  // 玩家子弹（青色发光的短线）
+  ctx.shadowColor = '#00e5ff';
+  ctx.shadowBlur = 10;
+  ctx.fillStyle = '#aaf6ff';
+  for (const b of bullets) {
+    ctx.fillRect(b.x - 2, b.y - 8, 4, 14);
+  }
+
+  // 敌人子弹（粉色圆点）
+  for (const b of enemyBullets) {
+    ctx.shadowColor = b.boss ? '#ff2fd6' : '#b026ff';
+    ctx.fillStyle = b.boss ? '#ff8fe9' : '#d48cff';
+    ctx.beginPath();
+    ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+    ctx.fill();
+  }
+  ctx.shadowBlur = 0;
+
+  for (const p of powerups) drawPowerup(p);
+  for (const e of enemies) drawEnemy(e);
+  if (boss) drawBoss();
+  if (player && state === 'playing') drawPlayer();
+
+  // 爆炸碎片
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life / p.maxLife);
+    ctx.fillStyle = p.color;
+    ctx.fillRect(p.x, p.y, p.size, p.size);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.restore();
+}
+
+// =====================================================================
+//  十、游戏主循环：每秒约 60 次，先更新再绘制
+// =====================================================================
+let lastTime = performance.now();
+function loop(now) {
+  // dt 是距离上一帧过了多少秒；限制最大值，防止切换标签页回来时“瞬移”
+  const dt = Math.min((now - lastTime) / 1000, 0.05);
+  lastTime = now;
+  update(dt);
+  draw();
+  requestAnimationFrame(loop);
+}
+
+// 启动！
+resize();
+initStars();
+updateHUD();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
